@@ -81,12 +81,15 @@ send_message("🚀 Visa bot started (Playwright mode)")
 print("Bot running...")
 
 
-while True:
-    alerts = evaluate()
+def main():
+    chennai, hyderabad = check_slots()
 
-    for msg in alerts:
-        send_message(msg)
+    print(f"Chennai={chennai} Hyderabad={hyderabad}")
 
-    print(f"[{datetime.now()}] Chennai={state['chennai']} Hyderabad={state['hyderabad']}")
+    if chennai or hyderabad:
+        send_message(f"🚨 Slot found!\nChennai: {chennai}\nHyderabad: {hyderabad}")
+    else:
+        print("No slots found")
 
-    time.sleep(CHECK_INTERVAL)
+if __name__ == "__main__":
+    main()
