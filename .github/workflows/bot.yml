@@ -2,26 +2,32 @@ name: Visa Slot Bot
 
 on:
   schedule:
-    - cron: "*/5 * * * *"   # every 5 minutes
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
-  run-bot:
+  check-slots:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: |
-          pip install requests beautifulsoup4 playwright
+          pip install requests playwright
           playwright install chromium
+          playwright install-deps chromium
 
       - name: Run bot
-        run: python visa_checker.py
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: |
+          timeout 120 python visa_checker.py

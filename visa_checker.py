@@ -1,95 +1,74 @@
-import time
-from datetime import datetime
-from playwright.sync_api import sync_playwright
-import requests
+import os
+import sys
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
-BOT_TOKEN = "8746011664:AAEJYvYe7euO4_VeqAowfJ_BLCVZ3FokPss"
-CHAT_ID = "8152856153"
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+CHAT_ID = os.environ.get("CHAT_ID")
 
-CHECK_INTERVAL = 60  # 60 seconds
-
-state = {
-    "chennai": False,
-    "hyderabad": False
+URLS = {
+    "Chennai": "https://www.vfsglobal.com/en/individuals/book-appointment.html",
+    "Hyderabad": "https://www.vfsglobal.com/en/individuals/book-appointment.html",
 }
 
-
-def send_message(text):
+def send_telegram(message):
+    import requests
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": text})
+    requests.post(url, data={"chat_id": CHAT_ID, "text": message}, timeout=10)
 
-
-def check_page():
-    from playwright.sync_api import sync_playwright
+def check_slots():
+    results = {}
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox"]
+        )
+        context = browser.new_context()
+        page = context.new_page()
 
-        url = "https://www.usvisaslotsinfo.com/visa/b1-b2"
-        page.goto(url, timeout=60000)
+        for city, url in URLS.items():
+            try:
+                print(f"Checking {city}...")
+                page.goto(url, timeout=30000)
+                page.wait_for_load_state("networkidle", timeout=15000)
 
-        # wait for content to load properly
-        page.wait_for_timeout(5000)
+                content = page.content()
+                slot_available = "No appointments" not in content
 
-        content = page.content().lower()
+                results[city] = slot_available
+                print(f"{city}: {'✅ SLOT FOUND' if slot_available else '❌ No slot'}")
+
+            except PlaywrightTimeout:
+                print(f"⚠️ Timeout while checking {city} — skipping")
+                results[city] = None
+            except Exception as e:
+                print(f"⚠️ Error checking {city}: {e}")
+                results[city] = None
 
         browser.close()
 
-        # 🔴 STRICT detection rules (avoid false positives)
-
-        chennai_flag = False
-        hyderabad_flag = False
-
-        # look for structured indicators, not just "available"
-        if "chennai" in content:
-            if "available" in content or "slots" in content:
-                # extra safety: ensure it's not just page header text
-                chennai_flag = "chennai" in content.split("available")[-1][:200]
-
-        if "hyderabad" in content:
-            if "available" in content or "slots" in content:
-                hyderabad_flag = "hyderabad" in content.split("available")[-1][:200]
-
-        return chennai_flag, hyderabad_flag
-
-
-def evaluate():
-    global state
-
-    try:
-        chennai, hyderabad = check_page()
-
-        alerts = []
-
-        if chennai and not state["chennai"]:
-            alerts.append("🚨 B1/B2 SLOT AVAILABLE IN CHENNAI")
-
-        if hyderabad and not state["hyderabad"]:
-            alerts.append("🚨 B1/B2 SLOT AVAILABLE IN HYDERABAD")
-
-        state["chennai"] = chennai
-        state["hyderabad"] = hyderabad
-
-        return alerts
-
-    except Exception as e:
-        return [f"⚠️ Error checking slots: {e}"]
-
-
-send_message("🚀 Visa bot started (Playwright mode)")
-print("Bot running...")
-
+    return results
 
 def main():
-    chennai, hyderabad = check_slots()
+    print("🤖 Visa slot checker starting...")
 
-    print(f"Chennai={chennai} Hyderabad={hyderabad}")
+    if not BOT_TOKEN or not CHAT_ID:
+        print("❌ BOT_TOKEN or CHAT_ID not set in environment secrets")
+        sys.exit(1)
 
-    if chennai or hyderabad:
-        send_message(f"🚨 Slot found!\nChennai: {chennai}\nHyderabad: {hyderabad}")
-    else:
-        print("No slots found")
+    results = check_slots()
+
+    found_any = False
+    for city, available in results.items():
+        if available is True:
+            send_telegram(f"🚨 VISA SLOT AVAILABLE in {city}! Book now!")
+            found_any = True
+
+    if not found_any:
+        print("No slots found. No Telegram message sent.")
+
+    print("✅ Check complete. Exiting.")
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()
