@@ -6,9 +6,12 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
 
 URLS = {
-    "Chennai": "https://www.vfsglobal.com/en/individuals/book-appointment.html",
-    "Hyderabad": "https://www.vfsglobal.com/en/individuals/book-appointment.html",
+    "Chennai": "https://checkvisaslots.com/visa-slots-info/in/b1-b2-regular/",
+    "Hyderabad": "https://checkvisaslots.com/visa-slots-info/in/b1-b2-regular/",
 }
+
+KEYWORDS_AVAILABLE = ["chennai", "hyderabad", "available", "slots found"]
+KEYWORDS_UNAVAILABLE = ["no slots", "no appointments", "not available", "unavailable"]
 
 def send_telegram(message):
     import requests
@@ -32,43 +35,22 @@ def check_slots():
                 page.goto(url, timeout=30000)
                 page.wait_for_load_state("networkidle", timeout=15000)
 
-                content = page.content()
-                slot_available = "No appointments" not in content
+                content = page.content().lower()
 
-                results[city] = slot_available
-                print(f"{city}: {'✅ SLOT FOUND' if slot_available else '❌ No slot'}")
+                unavailable = any(kw in content for kw in KEYWORDS_UNAVAILABLE)
+                available = any(kw in content for kw in KEYWORDS_AVAILABLE)
+
+                if unavailable:
+                    results[city] = False
+                elif available:
+                    results[city] = True
+                else:
+                    results[city] = None  # page loaded but unclear
+
+                print(f"{city}: {'✅ SLOT FOUND' if results[city] else '❌ No slot'}")
 
             except PlaywrightTimeout:
                 print(f"⚠️ Timeout while checking {city} — skipping")
-                results[city] = None
-            except Exception as e:
-                print(f"⚠️ Error checking {city}: {e}")
-                results[city] = None
-
-        browser.close()
-
-    return results
-
-def main():
-    print("🤖 Visa slot checker starting...")
-
-    if not BOT_TOKEN or not CHAT_ID:
-        print("❌ BOT_TOKEN or CHAT_ID not set in environment secrets")
-        sys.exit(1)
-
-    results = check_slots()
-
-    found_any = False
-    for city, available in results.items():
-        if available is True:
-            send_telegram(f"🚨 VISA SLOT AVAILABLE in {city}! Book now!")
-            found_any = True
-
-    if not found_any:
-        print("No slots found. No Telegram message sent.")
-
-    print("✅ Check complete. Exiting.")
-    sys.exit(0)
-
-if __name__ == "__main__":
-    main()
+git add .
+git commit -m "Update: monitor checkvisaslots for B1/B2 Chennai & Hyderabad"
+git push
