@@ -19,7 +19,13 @@ def check_slots():
             headless=True,
             args=["--no-sandbox", "--disable-setuid-sandbox"]
         )
-        context = browser.new_context()
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            extra_http_headers={
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            }
+        )
         page = context.new_page()
 
         try:
@@ -27,7 +33,6 @@ def check_slots():
             page.goto(URL, timeout=30000)
             page.wait_for_load_state("networkidle", timeout=15000)
 
-            # Print raw visible text so we can see exact format
             content = page.inner_text("body")
             print("=== PAGE TEXT START ===")
             print(content[:3000])
